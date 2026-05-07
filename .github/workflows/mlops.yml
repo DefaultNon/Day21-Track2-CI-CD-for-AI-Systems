@@ -181,6 +181,8 @@ jobs:
             .venv/bin/pip install -r requirements.txt
 
             # 4. Tao file service systemd (neu chua co)
+            # Su dung duong dan tuyet doi de systemd khong bi nham lan
+            USER_HOME=$(eval echo ~$USER)
             cat <<EOF | sudo tee /etc/systemd/system/mlops-serve.service
             [Unit]
             Description=MLOps Inference Service
@@ -191,7 +193,7 @@ jobs:
             WorkingDirectory=$PROJECT_DIR
             ExecStart=$PROJECT_DIR/.venv/bin/uvicorn src.serve:app --host 0.0.0.0 --port 8000
             Restart=always
-            Environment="GOOGLE_APPLICATION_CREDENTIALS=$HOME/sa-key.json"
+            Environment="GOOGLE_APPLICATION_CREDENTIALS=$USER_HOME/sa-key.json"
             Environment="CLOUD_BUCKET=${{ secrets.CLOUD_BUCKET }}"
 
             [Install]
@@ -199,7 +201,8 @@ jobs:
             EOF
 
             # 5. Copy sa-key vao VM (Lay tu secret)
-            echo '${{ secrets.CLOUD_CREDENTIALS }}' > $HOME/sa-key.json
+            echo '${{ secrets.CLOUD_CREDENTIALS }}' > $USER_HOME/sa-key.json
+            chmod 600 $USER_HOME/sa-key.json
 
             # 6. Khoi dong lai service
             sudo systemctl daemon-reload
