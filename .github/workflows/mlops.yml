@@ -163,9 +163,50 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            # TODO 7: Restart service mlops-serve tren VM.
-            # TODO 8: Cho server san sang roi goi curl /health de xac nhan.
-            #         Neu health check that bai sau nhieu lan thu, thoat voi exit 1.
+            # 1. Cai dat cac goi he thong can thiet
+            sudo apt-get update
+            sudo apt-get install -y python3-pip python3-venv git
+
+            # 2. Thiet lap thu muc du an
+            PROJECT_DIR=~/Day21-Track2-CI-CD-for-AI-Systems
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://github.com/${{ github.repository }}.git $PROJECT_DIR
+            fi
+            cd $PROJECT_DIR
+            git pull origin master
+
+            # 3. Tao moi truong ao va cai dat dependencies
+            python3 -m venv .venv
+            .venv/bin/pip install --upgrade pip
+            .venv/bin/pip install -r requirements.txt
+
+            # 4. Tao file service systemd (neu chua co)
+            cat <<EOF | sudo tee /etc/systemd/system/mlops-serve.service
+            [Unit]
+            Description=MLOps Inference Service
+            After=network.target
+
+            [Service]
+            User=$USER
+            WorkingDirectory=$PROJECT_DIR
+            ExecStart=$PROJECT_DIR/.venv/bin/uvicorn src.serve:app --host 0.0.0.0 --port 8000
+            Restart=always
+            Environment="GOOGLE_APPLICATION_CREDENTIALS=$HOME/sa-key.json"
+            Environment="CLOUD_BUCKET=${{ secrets.CLOUD_BUCKET }}"
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+            # 5. Copy sa-key vao VM (Lay tu secret)
+            echo '${{ secrets.CLOUD_CREDENTIALS }}' > $HOME/sa-key.json
+
+            # 6. Khoi dong lai service
+            sudo systemctl daemon-reload
+            sudo systemctl enable mlops-serve
             sudo systemctl restart mlops-serve
-            sleep 5
-            curl -sf http://localhost:8000/health && echo "Health check passed." || exit 1
+
+            # 7. Health check
+            echo "Waiting for service to start..."
+            sleep 10
+            curl -sf http://localhost:8000/health && echo "DEPLOY SUCCESSFUL: Health check passed." || (sudo journalctl -u mlops-serve -n 20 && exit 1)
