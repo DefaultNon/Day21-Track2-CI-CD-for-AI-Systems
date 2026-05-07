@@ -29,53 +29,75 @@ def train(
     """
 
     # TODO 1: Doc du lieu huan luyen va danh gia
-    # df_train = ...
-    # df_eval  = ...
+    df_train = pd.read_csv(data_path)
+    df_eval = pd.read_csv(eval_path)
 
     # TODO 2: Tach dac trung (X) va nhan (y)
-    # X_train = df_train.drop(columns=["target"])
-    # y_train = ...
-    # X_eval  = ...
-    # y_eval  = ...
+    X_train = df_train.drop(columns=["target"])
+    y_train = df_train["target"]
+    X_eval = df_eval.drop(columns=["target"])
+    y_eval = df_eval["target"]
+
+    # Bonus 5: Cảnh báo lệch lạc dữ liệu
+    print("\n--- Data Distribution Analysis ---")
+    dist = y_train.value_counts(normalize=True)
+    for cls, ratio in dist.items():
+        print(f"Class {cls}: {ratio:.2%}")
+        if ratio < 0.10:
+            print(f"WARNING: Class {cls} is underrepresented (<10%)!")
 
     with mlflow.start_run():
 
         # TODO 3: Ghi nhan cac sieu tham so
-        # mlflow.log_params(...)
+        mlflow.log_params(params)
 
         # TODO 4: Khoi tao va huan luyen RandomForestClassifier
         # Goi y: su dung random_state=42 de dam bao tinh tai tao
-        # model = RandomForestClassifier(...)
-        # model.fit(...)
+        model = RandomForestClassifier(**params, random_state=42)
+        model.fit(X_train, y_train)
 
         # TODO 5: Du doan tren tap danh gia va tinh chi so
-        # preds = ...
-        # acc   = accuracy_score(...)
-        # f1    = f1_score(..., average="weighted")
+        preds = model.predict(X_eval)
+        acc = accuracy_score(y_eval, preds)
+        f1 = f1_score(y_eval, preds, average="weighted")
 
         # TODO 6: Ghi nhan chi so vao MLflow
-        # mlflow.log_metric("accuracy", ...)
-        # mlflow.log_metric("f1_score", ...)
-        # mlflow.sklearn.log_model(model, "model")
+        mlflow.log_metric("accuracy", acc)
+        mlflow.log_metric("f1_score", f1)
+        # Log distribution to metrics for reference
+        for cls, ratio in dist.items():
+            mlflow.log_metric(f"ratio_class_{cls}", ratio)
+        
+        mlflow.sklearn.log_model(model, "model")
 
         # TODO 7: In ket qua ra man hinh
-        # print(f"Accuracy: {acc:.4f} | F1: {f1:.4f}")
+        print("\n--- Model Performance ---")
+        print(f"Accuracy: {acc:.4f} | F1: {f1:.4f}")
+
+        # Bonus 3: Báo cáo hiệu suất tự động (Precision/Recall per class)
+        from sklearn.metrics import classification_report
+        report_text = classification_report(y_eval, preds)
+        os.makedirs("outputs", exist_ok=True)
+        with open("outputs/report.txt", "w") as f:
+            f.write(report_text)
+        print("\nClassification Report saved to outputs/report.txt")
 
         # TODO 8: Luu metrics ra file outputs/metrics.json
         # File nay duoc doc boi GitHub Actions o Buoc 2
-        # os.makedirs("outputs", exist_ok=True)
-        # with open("outputs/metrics.json", "w") as f:
-        #     json.dump({"accuracy": acc, "f1_score": f1}, f)
+        with open("outputs/metrics.json", "w") as f:
+            json.dump({
+                "accuracy": acc, 
+                "f1_score": f1,
+                "distribution": dist.to_dict()
+            }, f)
 
         # TODO 9: Luu mo hinh ra file models/model.pkl
         # File nay duoc upload len GCS o Buoc 2
-        # os.makedirs("models", exist_ok=True)
-        # joblib.dump(model, "models/model.pkl")
-
-        pass  # xoa dong nay sau khi hoan thanh tat ca TODO ben tren
+        os.makedirs("models", exist_ok=True)
+        joblib.dump(model, "models/model.pkl")
 
     # TODO 10: Tra ve acc
-    # return acc
+    return acc
 
 
 if __name__ == "__main__":
