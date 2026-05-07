@@ -52,7 +52,7 @@ load_model()
 def health():
     """Endpoint kiem tra suc khoe server."""
     if model is None:
-        return {"status": "error", "message": "Model not loaded"}, 503
+        raise HTTPException(status_code=503, detail="Model not loaded yet")
     return {"status": "ok"}
 
 @app.post("/predict")
